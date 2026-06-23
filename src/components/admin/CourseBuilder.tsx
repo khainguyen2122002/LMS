@@ -854,6 +854,10 @@ function SortableLesson({ lesson, onDelete, onEdit }: {
     }
   }
 
+  const quizCount = lesson.quizzes?.length || 0
+  const hasEssay = !!(lesson.essay_link && lesson.essay_link.trim() !== '')
+  const totalExercises = quizCount + (hasEssay ? 1 : 0)
+
   return (
     <div
       ref={setNodeRef}
@@ -868,7 +872,16 @@ function SortableLesson({ lesson, onDelete, onEdit }: {
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-bold text-gray-700 truncate">{lesson.title}</p>
-        <p className="text-[10px] text-gray-400 uppercase tracking-tight">{getTypeName(lesson.type)}</p>
+        <div className="flex items-center gap-2 mt-0.5">
+          <p className="text-[10px] text-gray-400 uppercase tracking-tight">{getTypeName(lesson.type)}</p>
+          {totalExercises > 0 && (
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-green-50 text-green-700 border border-green-200 text-[9px] font-bold">
+              {quizCount > 0 && `${quizCount} TN`}
+              {quizCount > 0 && hasEssay && ' + '}
+              {hasEssay && '1 TL'}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
         <button

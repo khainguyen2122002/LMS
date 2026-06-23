@@ -23,10 +23,20 @@ export default async function AdminCourseDetailPage({
           title,
           order_index,
           lessons (
-            id,
-            title,
-            type,
-            order_index
+            *,
+            quizzes:lesson_quizzes (
+              id,
+              question,
+              options,
+              correct_option_index,
+              explanation
+            ),
+            assignments (
+              id,
+              title,
+              description,
+              essay_link
+            )
           )
         )
       `)
@@ -40,11 +50,22 @@ export default async function AdminCourseDetailPage({
     // Sắp xếp lại modules và lessons theo order_index
     course = {
       ...courseData,
-      modules: courseData.modules
+      modules: (courseData.modules || [])
         .sort((a: any, b: any) => a.order_index - b.order_index)
         .map((m: any) => ({
           ...m,
-          lessons: m.lessons.sort((a: any, b: any) => a.order_index - b.order_index)
+          lessons: (m.lessons || [])
+            .sort((a: any, b: any) => a.order_index - b.order_index)
+            .map((l: any) => {
+              const assignment = l.assignments?.[0]
+              return {
+                ...l,
+                essay_title: assignment?.title || '',
+                essay_description: assignment?.description || '',
+                essay_link: assignment?.essay_link || '',
+                quizzes: l.quizzes || []
+              }
+            })
         }))
     }
   }
