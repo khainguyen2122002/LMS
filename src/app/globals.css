@@ -1,0 +1,91 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&display=swap');
+@import "tailwindcss";
+
+@theme inline {
+  --color-primary: #103C11;
+  --color-secondary: #C7A959;
+  --color-inspiring-green: #103C11;
+  --color-inspiring-gold: #C7A959;
+  --color-inspiring-green-light: #1e5c20;
+  --color-inspiring-gold-light: #d8be7b;
+  
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+:root {
+  --background: #fdfdfd;
+  --foreground: #171717;
+  --sidebar-width: 280px;
+  --font-sans: 'Outfit', sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+.inspiring-gradient {
+  background: linear-gradient(135deg, #103C11 0%, #1e5c20 100%);
+}
+
+.gold-gradient {
+  background: linear-gradient(135deg, #C7A959 0%, #d8be7b 100%);
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Custom Animations & Transitions */
+@keyframes pulseSlow {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.98; transform: scale(1.01); }
+}
+
+.animate-pulse-slow {
+  animation: pulseSlow 5s infinite ease-in-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+/* Card hover effect */
+.hover-card-effect {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.hover-card-effect:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 12px 20px -8px rgba(16, 60, 17, 0.15);
+}
