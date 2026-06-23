@@ -58,7 +58,11 @@ async function syncLessonQuizzesAndAssignments(supabase: any, lessonId: string, 
 
   // 1. Sync Quizzes (MCQs)
   // Xóa toàn bộ quiz cũ của bài học này và lưu lại danh sách mới
-  await supabase.from('lesson_quizzes').delete().eq('lesson_id', lessonId)
+  const { error: delQuizErr } = await supabase.from('lesson_quizzes').delete().eq('lesson_id', lessonId)
+  if (delQuizErr) {
+    throw new Error(`Không thể làm sạch trắc nghiệm cũ: ${delQuizErr.message}`)
+  }
+
   if (lesson.quizzes && lesson.quizzes.length > 0) {
     const quizRows = lesson.quizzes.map(q => ({
       lesson_id: lessonId,
@@ -67,16 +71,23 @@ async function syncLessonQuizzesAndAssignments(supabase: any, lessonId: string, 
       correct_option_index: q.correct_option_index,
       explanation: q.explanation || null
     }))
-    await supabase.from('lesson_quizzes').insert(quizRows)
+    const { error: insQuizErr } = await supabase.from('lesson_quizzes').insert(quizRows)
+    if (insQuizErr) {
+      throw new Error(`Không thể lưu câu hỏi trắc nghiệm mới: ${insQuizErr.message}`)
+    }
   }
 
   // 2. Sync Assignments (Tự luận)
   if (lesson.essay_link && lesson.essay_link.trim() !== '') {
-    const { data: existingAssignment } = await supabase
+    const { data: existingAssignment, error: findAssignErr } = await supabase
       .from('assignments')
       .select('id')
       .eq('lesson_id', lessonId)
-      .single()
+      .maybeSingle() // Dùng maybeSingle để tránh lỗi PGRST116 khi không tìm thấy
+
+    if (findAssignErr) {
+      throw new Error(`Không thể kiểm tra bài tập tự luận cũ: ${findAssignErr.message}`)
+    }
 
     const assignmentData = {
       lesson_id: lessonId,
@@ -88,18 +99,29 @@ async function syncLessonQuizzesAndAssignments(supabase: any, lessonId: string, 
     }
 
     if (existingAssignment) {
-      await supabase
+      const { error: updAssignErr } = await supabase
         .from('assignments')
         .update(assignmentData)
         .eq('id', existingAssignment.id)
+      
+      if (updAssignErr) {
+        throw new Error(`Không thể cập nhật bài tập tự luận: ${updAssignErr.message}`)
+      }
     } else {
-      await supabase
+      const { error: insAssignErr } = await supabase
         .from('assignments')
         .insert(assignmentData)
+
+      if (insAssignErr) {
+        throw new Error(`Không thể tạo bài tập tự luận mới: ${insAssignErr.message}`)
+      }
     }
   } else {
     // Nếu không có link nộp bài tự luận, tiến hành xóa assignment của bài học này
-    await supabase.from('assignments').delete().eq('lesson_id', lessonId)
+    const { error: delAssignErr } = await supabase.from('assignments').delete().eq('lesson_id', lessonId)
+    if (delAssignErr) {
+      throw new Error(`Không thể xóa bài tập tự luận cũ: ${delAssignErr.message}`)
+    }
   }
 }
 
@@ -219,8 +241,14 @@ export async function saveCourse(courseData: SaveCourseInput) {
           .select('id')
           .single()
 
-        if (!lesError && newLesson) {
+        if (lesError || !newLesson) {
+          return { error: `Không thể tạo bài học "${lesson.title}": ${lesError?.message || 'Lỗi không xác định'}` }
+        }
+
+        try {
           await syncLessonQuizzesAndAssignments(supabase, newLesson.id, lesson)
+        } catch (err: any) {
+          return { error: `Lỗi lưu bài tập cho bài học "${lesson.title}": ${err.message}` }
         }
       }
     } else {
@@ -263,11 +291,12 @@ export async function saveCourse(courseData: SaveCourseInput) {
             .select('id')
             .single()
 
-          if (!lesError && newLesson) {
-            lessonId = newLesson.id
+          if (lesError || !newLesson) {
+            return { error: `Không thể tạo bài học "${lesson.title}": ${lesError?.message || 'Lỗi không xác định'}` }
           }
+          lessonId = newLesson.id
         } else {
-          await supabase
+          const { error: lesUpdateErr } = await supabase
             .from('lessons')
             .update({
               title: lesson.title,
@@ -280,9 +309,17 @@ export async function saveCourse(courseData: SaveCourseInput) {
               attachments: lesson.attachments || [],
             })
             .eq('id', lesson.id)
+
+          if (lesUpdateErr) {
+            return { error: `Không thể cập nhật bài học "${lesson.title}": ${lesUpdateErr.message}` }
+          }
         }
 
-        await syncLessonQuizzesAndAssignments(supabase, lessonId, lesson)
+        try {
+          await syncLessonQuizzesAndAssignments(supabase, lessonId, lesson)
+        } catch (err: any) {
+          return { error: `Lỗi lưu bài tập cho bài học "${lesson.title}": ${err.message}` }
+        }
       }
     }
   }
