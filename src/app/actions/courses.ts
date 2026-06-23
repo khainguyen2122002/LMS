@@ -195,7 +195,9 @@ export async function saveCourse(courseData: SaveCourseInput) {
         .select('id')
         .single()
 
-      if (modError || !newModule) continue
+      if (modError || !newModule) {
+        return { error: `Không thể tạo chương "${module.title}": ${modError?.message || 'Lỗi không xác định. Vui lòng kiểm tra quyền RLS trong Supabase.'}` }
+      }
       moduleId = newModule.id
 
       // Insert lessons for this module

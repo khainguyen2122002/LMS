@@ -320,7 +320,7 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
       ) : activeTab === 'curriculum' ? (
         <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm min-h-[500px]">
           <CourseBuilder
-            initialModules={course?.modules || []}
+            initialModules={modules}
             onModulesChange={setModules}
           />
         </div>
