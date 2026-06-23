@@ -19,7 +19,6 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
     description: course?.description || '',
     category_id: course?.category_id || '',
     level: course?.level || 'Cơ bản',
-    price: course?.price || 0,
     status: course?.status || 'draft',
     thumbnail_url: course?.thumbnail_url || ''
   })
@@ -295,16 +294,7 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-gray-700">Giá khóa học (đ)</label>
-                <input
-                  type="number"
-                  name="price"
-                  value={formData.price}
-                  onChange={handleChange}
-                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all font-bold text-[#C7A959]"
-                />
-              </div>
+
             </div>
           </div>
         </div>

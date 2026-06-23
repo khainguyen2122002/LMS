@@ -122,9 +122,27 @@ export async function submitCheckpointQuiz(lessonId: string, courseId: string, a
   if (isPassed) {
     // Đánh dấu hoàn thành bài học
     await markLessonComplete(lessonId, courseId)
-    return { success: true, message: 'Chúc mừng! Bạn đã hoàn thành bài học.' }
-  } else {
-    return { success: false, message: `Bạn trả lời đúng ${correctCount}/${quizzes.length}. Cần đúng hết để hoàn thành.` }
+  }
+
+  // Trả về kết quả chi tiết kèm đáp án đúng và giải thích
+  return {
+    success: isPassed,
+    correctCount,
+    totalCount: quizzes.length,
+    message: isPassed 
+      ? 'Chúc mừng! Bạn đã trả lời đúng tất cả các câu hỏi và hoàn thành bài học.' 
+      : `Bạn trả lời đúng ${correctCount}/${quizzes.length} câu hỏi. Hãy xem lại giải thích phía dưới và thử lại.`,
+    gradedQuizzes: quizzes.map((q: any) => {
+      const userAnswer = answers.find((a: any) => a.questionId === q.id)
+      return {
+        id: q.id,
+        question: q.question,
+        options: q.options,
+        correct_option_index: q.correct_option_index,
+        explanation: q.explanation || 'Không có giải thích chi tiết.',
+        userAnswerIndex: userAnswer ? userAnswer.answerIndex : null
+      }
+    })
   }
 }
 

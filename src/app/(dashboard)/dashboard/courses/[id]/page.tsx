@@ -225,12 +225,7 @@ export default async function CourseDetailPage({ params }: PageProps) {
                 <span>Tổng thời lượng:</span>
                 <span className="text-gray-900 font-bold">{finalCourse.total_duration} phút</span>
               </div>
-              <div className="flex justify-between items-center text-gray-500">
-                <span>Học phí:</span>
-                <span className="text-2xl font-black text-[#C7A959]">
-                  {finalCourse.price > 0 ? `${finalCourse.price.toLocaleString('vi-VN')} đ` : 'Miễn phí'}
-                </span>
-              </div>
+
             </div>
 
             {/* Form Hành động (Đăng ký học / Vào học) */}

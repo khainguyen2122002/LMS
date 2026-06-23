@@ -9,7 +9,8 @@ import {
   Settings, 
   LogOut,
   List,
-  GraduationCap
+  GraduationCap,
+  FileText
 } from 'lucide-react'
 
 import Image from 'next/image'
@@ -33,6 +34,8 @@ export default function Sidebar({ role }: SidebarProps) {
         ...baseItems,
         { name: 'Khóa học', href: '/dashboard/courses', icon: GraduationCap },
         { name: 'Quản lý Khóa học', href: '/dashboard/admin/courses', icon: BookOpen },
+        { name: 'Danh mục', href: '/dashboard/admin/categories', icon: List },
+        { name: 'Bài nộp', href: '/dashboard/admin/submissions', icon: FileText },
         { name: 'Người dùng', href: '/dashboard/admin/users', icon: Users },
         { name: 'Cài đặt', href: '/dashboard/settings', icon: Settings },
       ]
@@ -42,6 +45,7 @@ export default function Sidebar({ role }: SidebarProps) {
       return [
         ...baseItems,
         { name: 'Quản lý Khóa học', href: '/dashboard/admin/courses', icon: BookOpen },
+        { name: 'Bài nộp', href: '/dashboard/admin/submissions', icon: FileText },
         { name: 'Học viên', href: '/dashboard/students', icon: Users },
       ]
     }

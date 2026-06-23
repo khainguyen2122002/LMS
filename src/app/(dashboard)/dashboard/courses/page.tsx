@@ -54,13 +54,10 @@ export default async function CoursesPage() {
                   </div>
                 </div>
 
-                <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
-                  <span className="font-bold text-[#C7A959]">
-                    {course.price > 0 ? `${course.price.toLocaleString('vi-VN')} đ` : 'Miễn phí'}
-                  </span>
+                <div className="pt-4 border-t border-gray-100">
                   <Link 
                     href={`/dashboard/courses/${course.slug || course.id}`}
-                    className="text-sm font-medium text-[#103C11] hover:text-[#1e5c20] bg-[#e6f0e7] px-4 py-2 rounded-lg transition-colors"
+                    className="block w-full text-center text-sm font-bold text-white hover:bg-[#1e5c20] bg-[#103C11] py-2.5 rounded-xl transition-all shadow-md"
                   >
                     Xem chi tiết
                   </Link>

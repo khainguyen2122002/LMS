@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useRef } from 'react'
 import {
   DndContext,
   closestCenter,
@@ -37,15 +37,37 @@ import {
   Link as LinkIcon,
   StickyNote,
   Settings2,
-  Loader2
+  Loader2,
+  HelpCircle,
+  Upload,
+  BookOpen,
+  File
 } from 'lucide-react'
+import { uploadFile } from '@/app/actions/upload'
 
 // --- Types ---
+interface Quiz {
+  id?: string
+  question: string
+  options: string[]
+  correct_option_index: number
+  explanation?: string
+}
+
 interface Lesson {
   id: string
   title: string
   type: string
   order_index: number
+  description?: string
+  duration_minutes?: number
+  video_url?: string
+  slide_url?: string
+  attachments?: any[]
+  quizzes?: Quiz[]
+  essay_title?: string
+  essay_description?: string
+  essay_link?: string
 }
 
 interface Module {
@@ -60,86 +82,6 @@ interface Module {
   tags?: string
   internal_note?: string
   lessons: Lesson[]
-}
-
-// --- Add Lesson Modal ---
-function AddLessonModal({ moduleId, onClose, onAdd }: {
-  moduleId: string
-  onClose: () => void
-  onAdd: (moduleId: string, lesson: Lesson) => void
-}) {
-  const [lessonTitle, setLessonTitle] = useState('')
-  const [lessonType, setLessonType] = useState('video')
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!lessonTitle.trim()) return
-    onAdd(moduleId, {
-      id: `lesson-${Date.now()}`,
-      title: lessonTitle.trim(),
-      type: lessonType,
-      order_index: 0
-    })
-    onClose()
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-scale-in">
-        <div className="flex items-center justify-between p-6 border-b border-gray-100">
-          <h3 className="font-bold text-gray-800 text-lg">Thêm bài học mới</h3>
-          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 transition-colors rounded-lg hover:bg-gray-100">
-            <X size={20} />
-          </button>
-        </div>
-        <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Tên bài học <span className="text-red-500">*</span></label>
-            <input
-              autoFocus
-              type="text"
-              value={lessonTitle}
-              onChange={e => setLessonTitle(e.target.value)}
-              placeholder="VD: Bài 1: Giới thiệu chung"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all"
-            />
-          </div>
-          <div className="space-y-2">
-            <label className="text-sm font-bold text-gray-700">Loại bài học</label>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { value: 'video', label: 'Video', icon: <Video size={16} /> },
-                { value: 'pdf', label: 'Tài liệu PDF', icon: <FileText size={16} /> },
-                { value: 'quiz', label: 'Bài kiểm tra', icon: <CheckCircle2 size={16} /> },
-                { value: 'assignment', label: 'Bài tập', icon: <FileCode2 size={16} /> },
-              ].map(opt => (
-                <button
-                  key={opt.value}
-                  type="button"
-                  onClick={() => setLessonType(opt.value)}
-                  className={`flex items-center gap-2 px-4 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                    lessonType === opt.value
-                      ? 'border-[#103C11] bg-[#e6f0e7] text-[#103C11]'
-                      : 'border-gray-200 text-gray-600 hover:border-gray-300'
-                  }`}
-                >
-                  {opt.icon} {opt.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex gap-3 pt-2">
-            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-50 transition-colors">
-              Hủy
-            </button>
-            <button type="submit" className="flex-1 px-4 py-3 rounded-xl bg-[#103C11] text-white font-bold hover:bg-[#1e5c20] transition-colors">
-              Thêm bài học
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  )
 }
 
 // --- Add/Edit Chapter Modal ---
@@ -207,7 +149,7 @@ function ChapterModal({
             onClick={() => setActiveSection('basic')}
             className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeSection === 'basic' ? 'bg-[#e6f0e7] text-[#103C11]' : 'text-gray-500 hover:bg-gray-100'}`}
           >
-            <ListOrdered size={15} /> Thông tin cơ bản
+            <BookOpen size={15} /> Thông tin cơ bản
           </button>
           <button
             type="button"
@@ -423,6 +365,462 @@ function ChapterModal({
   )
 }
 
+// --- Unified Lesson Modal (Add & Edit) ---
+function LessonModal({
+  moduleId,
+  lesson,
+  onClose,
+  onSave
+}: {
+  moduleId: string
+  lesson?: Lesson
+  onClose: () => void
+  onSave: (moduleId: string, lesson: Lesson) => void
+}) {
+  const isEdit = !!lesson
+  const [activeTab, setActiveTab] = useState<'basic' | 'content' | 'assignments'>('basic')
+  
+  // General Info States
+  const [title, setTitle] = useState(lesson?.title || '')
+  const [type, setType] = useState(lesson?.type || 'video')
+  const [description, setDescription] = useState(lesson?.description || '')
+  const [durationMinutes, setDurationMinutes] = useState(lesson?.duration_minutes || 15)
+  
+  // Content States
+  const [videoUrl, setVideoUrl] = useState(lesson?.video_url || '')
+  const [slideUrl, setSlideUrl] = useState(lesson?.slide_url || '')
+  const [attachments, setAttachments] = useState<any[]>(lesson?.attachments || [])
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Assignments States (MCQ + Essay)
+  const [quizzes, setQuizzes] = useState<Quiz[]>(lesson?.quizzes || [])
+  const [essayTitle, setEssayTitle] = useState(lesson?.essay_title || '')
+  const [essayDescription, setEssayDescription] = useState(lesson?.essay_description || '')
+  const [essayLink, setEssayLink] = useState(lesson?.essay_link || '')
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    setUploadingFile(true)
+    for (let i = 0; i < files.length; i++) {
+      const fileObj = files[i]
+      const formData = new FormData()
+      formData.append('file', fileObj)
+
+      const res = await uploadFile(formData)
+      if (res.error) {
+        alert(res.error)
+      } else if (res.url) {
+        setAttachments(prev => [...prev, { name: res.name, url: res.url, size: res.size }])
+      }
+    }
+    setUploadingFile(false)
+    if (fileInputRef.current) fileInputRef.current.value = ''
+  }
+
+  const removeAttachment = (index: number) => {
+    setAttachments(prev => prev.filter((_, i) => i !== index))
+  }
+
+  // Quiz Editor Functions
+  const addQuizQuestion = () => {
+    setQuizzes(prev => [
+      ...prev,
+      {
+        question: '',
+        options: ['', '', '', ''],
+        correct_option_index: 0,
+        explanation: ''
+      }
+    ])
+  }
+
+  const removeQuizQuestion = (index: number) => {
+    setQuizzes(prev => prev.filter((_, i) => i !== index))
+  }
+
+  const updateQuizField = (index: number, field: keyof Quiz, value: any) => {
+    setQuizzes(prev =>
+      prev.map((q, i) => (i === index ? { ...q, [field]: value } : q))
+    )
+  }
+
+  const updateQuizOption = (quizIndex: number, optionIndex: number, value: string) => {
+    setQuizzes(prev =>
+      prev.map((q, i) => {
+        if (i === quizIndex) {
+          const newOptions = [...q.options]
+          newOptions[optionIndex] = value
+          return { ...q, options: newOptions }
+        }
+        return q
+      })
+    )
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!title.trim()) return
+
+    onSave(moduleId, {
+      id: lesson?.id || `lesson-${Date.now()}`,
+      title: title.trim(),
+      type,
+      order_index: lesson?.order_index || 0,
+      description: description.trim(),
+      duration_minutes: Number(durationMinutes),
+      video_url: videoUrl.trim(),
+      slide_url: slideUrl.trim(),
+      attachments,
+      quizzes,
+      essay_title: essayTitle.trim(),
+      essay_description: essayDescription.trim(),
+      essay_link: essayLink.trim()
+    })
+    onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col animate-scale-in">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between p-6 border-b border-gray-100 flex-shrink-0">
+          <div>
+            <h3 className="font-bold text-gray-800 text-lg">
+              {isEdit ? 'Chỉnh sửa bài học' : 'Thêm bài học mới'}
+            </h3>
+            <p className="text-sm text-gray-400 mt-0.5">{title || 'Chưa đặt tên bài học'}</p>
+          </div>
+          <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-700 transition-colors rounded-lg hover:bg-gray-100">
+            <X size={20} />
+          </button>
+        </div>
+
+        {/* Tab Buttons */}
+        <div className="flex items-center gap-1 px-6 pt-4 flex-shrink-0 border-b border-gray-50 pb-2">
+          <button
+            type="button"
+            onClick={() => setActiveTab('basic')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'basic' ? 'bg-[#e6f0e7] text-[#103C11]' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <BookOpen size={16} /> Thông tin chung
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('content')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'content' ? 'bg-[#e6f0e7] text-[#103C11]' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <Video size={16} /> Nội dung & Tài liệu
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('assignments')}
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold transition-all ${
+              activeTab === 'assignments' ? 'bg-[#e6f0e7] text-[#103C11]' : 'text-gray-500 hover:bg-gray-100'
+            }`}
+          >
+            <FileCode2 size={16} /> Bài tập & Đánh giá
+          </button>
+        </div>
+
+        {/* Modal Body Form */}
+        <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 p-6 space-y-6">
+          {activeTab === 'basic' && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Tên bài học <span className="text-red-500">*</span></label>
+                <input
+                  autoFocus
+                  type="text"
+                  value={title}
+                  onChange={e => setTitle(e.target.value)}
+                  placeholder="VD: Bài 1: Tổng quan quy chế công ty"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all text-sm"
+                  required
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Loại bài học chính</label>
+                  <select
+                    value={type}
+                    onChange={e => setType(e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all text-sm bg-white"
+                  >
+                    <option value="video">Video (Ưu tiên hiển thị)</option>
+                    <option value="slide">Slide (PowerPoint / PDF)</option>
+                    <option value="assignment">Bài tập (Trắc nghiệm / Tự luận)</option>
+                  </select>
+                </div>
+                
+                <div className="space-y-2">
+                  <label className="text-sm font-bold text-gray-700">Thời lượng học (phút)</label>
+                  <input
+                    type="number"
+                    value={durationMinutes}
+                    onChange={e => setDurationMinutes(Number(e.target.value))}
+                    min={1}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700">Mô tả bài học</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  placeholder="Mô tả nội dung bài học..."
+                  rows={4}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all resize-none text-sm"
+                />
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'content' && (
+            <div className="space-y-5">
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <Video size={16} className="text-[#103C11]" />
+                  Link Video bài học
+                </label>
+                <input
+                  type="url"
+                  value={videoUrl}
+                  onChange={e => setVideoUrl(e.target.value)}
+                  placeholder="https://www.youtube.com/watch?v=... hoặc Microsoft Stream Link"
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all text-sm"
+                />
+                <p className="text-[10px] text-gray-400">Hỗ trợ các link YouTube, Microsoft Teams record, Microsoft Stream.</p>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <FileText size={16} className="text-[#103C11]" />
+                  Link nhúng Slide (PowerPoint Online, Google Slides)
+                </label>
+                <input
+                  type="url"
+                  value={slideUrl}
+                  onChange={e => setSlideUrl(e.target.value)}
+                  placeholder="https://onedrive.live.com/embed?..."
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-[#103C11]/20 focus:border-[#103C11] outline-none transition-all text-sm"
+                />
+              </div>
+
+              <div className="space-y-3 pt-2">
+                <label className="text-sm font-bold text-gray-700 flex items-center gap-1.5">
+                  <Upload size={16} className="text-[#103C11]" />
+                  Tài liệu đính kèm (Video, PDF, Word, Excel...)
+                </label>
+                
+                <div 
+                  onClick={() => !uploadingFile && fileInputRef.current?.click()}
+                  className="border-2 border-dashed border-gray-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 hover:bg-gray-50 hover:border-[#103C11] transition-all cursor-pointer"
+                >
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    className="hidden"
+                    onChange={handleFileUpload}
+                  />
+                  {uploadingFile ? (
+                    <>
+                      <Loader2 className="animate-spin text-[#103C11]" size={32} />
+                      <span className="text-xs text-gray-500 font-bold">Đang tải file lên...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload size={24} className="text-gray-400" />
+                      <span className="text-xs text-gray-500 font-bold">Nhấp vào đây để tải tài liệu lên hệ thống local</span>
+                    </>
+                  )}
+                </div>
+
+                {attachments.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs font-bold text-gray-500">Danh sách tài liệu đính kèm ({attachments.length}):</p>
+                    <div className="bg-gray-50 rounded-xl border border-gray-100 p-2 divide-y divide-gray-200 max-h-40 overflow-y-auto">
+                      {attachments.map((file, idx) => (
+                        <div key={idx} className="py-2 px-3 flex items-center justify-between text-xs">
+                          <span className="font-bold text-gray-700 truncate max-w-[300px] flex items-center gap-1">
+                            <File size={14} className="text-gray-400 flex-shrink-0" />
+                            {file.name}
+                          </span>
+                          <div className="flex items-center gap-3">
+                            <span className="text-gray-400">{file.size}</span>
+                            <button
+                              type="button"
+                              onClick={() => removeAttachment(idx)}
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'assignments' && (
+            <div className="space-y-6">
+              {/* 1. Phần Trắc nghiệm (MCQ) */}
+              <div className="space-y-4 border-b border-gray-100 pb-6">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-[#103C11] text-sm flex items-center gap-1.5">
+                    <HelpCircle size={16} />
+                    1. Đánh giá Trắc nghiệm (MCQ)
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={addQuizQuestion}
+                    className="flex items-center gap-1 text-xs font-bold text-[#C7A959] hover:text-[#d99700] transition-colors"
+                  >
+                    <Plus size={14} /> Thêm câu hỏi
+                  </button>
+                </div>
+
+                {quizzes.length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">Chưa có câu hỏi trắc nghiệm nào cho bài học này.</p>
+                ) : (
+                  <div className="space-y-4 max-h-80 overflow-y-auto pr-1">
+                    {quizzes.map((quiz, qIdx) => (
+                      <div key={qIdx} className="bg-gray-50 border border-gray-200 rounded-xl p-4 space-y-3 relative">
+                        <button
+                          type="button"
+                          onClick={() => removeQuizQuestion(qIdx)}
+                          className="absolute right-4 top-4 text-red-500 hover:text-red-700 p-1 rounded-lg hover:bg-red-50"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                        
+                        <div className="space-y-1">
+                          <label className="text-xs font-bold text-gray-700">Câu hỏi {qIdx + 1}</label>
+                          <input
+                            type="text"
+                            value={quiz.question}
+                            onChange={e => updateQuizField(qIdx, 'question', e.target.value)}
+                            placeholder="Nhập nội dung câu hỏi..."
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-1 focus:ring-[#103C11] outline-none text-xs"
+                            required
+                          />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {quiz.options.map((opt, optIdx) => (
+                            <div key={optIdx} className="flex items-center gap-2">
+                              <input
+                                type="radio"
+                                name={`correct-${qIdx}`}
+                                checked={quiz.correct_option_index === optIdx}
+                                onChange={() => updateQuizField(qIdx, 'correct_option_index', optIdx)}
+                                className="text-[#103C11] focus:ring-[#103C11] w-4 h-4 shrink-0"
+                              />
+                              <input
+                                type="text"
+                                value={opt}
+                                onChange={e => updateQuizOption(qIdx, optIdx, e.target.value)}
+                                placeholder={`Lựa chọn ${String.fromCharCode(65 + optIdx)}`}
+                                className="w-full px-2 py-1.5 bg-white rounded-lg border border-gray-200 text-xs outline-none"
+                                required
+                              />
+                            </div>
+                          ))}
+                        </div>
+
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-bold text-gray-400 uppercase">Giải thích đáp án</label>
+                          <input
+                            type="text"
+                            value={quiz.explanation || ''}
+                            onChange={e => updateQuizField(qIdx, 'explanation', e.target.value)}
+                            placeholder="Giải thích vì sao lựa chọn này đúng..."
+                            className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 text-xs outline-none"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* 2. Phần Tự luận */}
+              <div className="space-y-4">
+                <h4 className="font-bold text-[#103C11] text-sm flex items-center gap-1.5">
+                  <FileCode2 size={16} />
+                  2. Đánh giá Tự luận (Essay)
+                </h4>
+
+                <div className="space-y-3 bg-gray-50 border border-gray-200 rounded-xl p-4">
+                  <div className="space-y-1">
+                    <label className="text-xs font-bold text-gray-700">Link nộp bài tự luận</label>
+                    <input
+                      type="url"
+                      value={essayLink}
+                      onChange={e => setEssayLink(e.target.value)}
+                      placeholder="https://drive.google.com/drive/folders/... hoặc Google Form Link"
+                      className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 focus:ring-1 focus:ring-[#103C11] outline-none text-xs"
+                    />
+                    <p className="text-[10px] text-gray-400">Nhập đường dẫn để học viên nộp file bài tập (Google Drive, Dropbox, v.v.)</p>
+                  </div>
+
+                  {essayLink.trim() !== '' && (
+                    <>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-700">Tiêu đề bài tự luận</label>
+                        <input
+                          type="text"
+                          value={essayTitle}
+                          onChange={e => setEssayTitle(e.target.value)}
+                          placeholder="VD: Bài thu hoạch chuyên đề 1"
+                          className="w-full px-3 py-2 bg-white rounded-lg border border-gray-200 outline-none text-xs"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <label className="text-xs font-bold text-gray-700">Yêu cầu tự luận</label>
+                        <textarea
+                          value={essayDescription}
+                          onChange={e => setEssayDescription(e.target.value)}
+                          placeholder="Yêu cầu học viên cần trình bày những gì..."
+                          rows={3}
+                          className="w-full p-3 bg-white rounded-lg border border-gray-200 outline-none text-xs resize-none"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Footer */}
+          <div className="flex gap-3 pt-4 border-t border-gray-100 flex-shrink-0 bg-gray-50/50 -m-6 p-6">
+            <button type="button" onClick={onClose} className="flex-1 px-4 py-3 rounded-xl border border-gray-200 text-gray-600 font-medium hover:bg-gray-100 transition-colors">
+              Hủy
+            </button>
+            <button type="submit" className="flex-1 px-4 py-3 rounded-xl bg-[#103C11] text-white font-bold hover:bg-[#1e5c20] transition-colors">
+              {isEdit ? 'Lưu thay đổi' : 'Thêm bài học'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
 // --- Sortable Lesson Item ---
 function SortableLesson({ lesson, onDelete, onEdit }: {
   lesson: Lesson
@@ -441,8 +839,7 @@ function SortableLesson({ lesson, onDelete, onEdit }: {
   const getIcon = (type: string) => {
     switch (type) {
       case 'video': return <Video size={16} className="text-blue-500" />
-      case 'pdf': return <FileText size={16} className="text-red-500" />
-      case 'quiz': return <CheckCircle2 size={16} className="text-green-500" />
+      case 'slide': return <FileText size={16} className="text-red-500" />
       case 'assignment': return <FileCode2 size={16} className="text-orange-500" />
       default: return <FileText size={16} className="text-gray-500" />
     }
@@ -451,8 +848,7 @@ function SortableLesson({ lesson, onDelete, onEdit }: {
   const getTypeName = (type: string) => {
     switch (type) {
       case 'video': return 'Video'
-      case 'pdf': return 'PDF'
-      case 'quiz': return 'Bài kiểm tra'
+      case 'slide': return 'Slide'
       case 'assignment': return 'Bài tập'
       default: return type
     }
@@ -471,7 +867,7 @@ function SortableLesson({ lesson, onDelete, onEdit }: {
         {getIcon(lesson.type)}
       </div>
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium text-gray-700 truncate">{lesson.title}</p>
+        <p className="text-sm font-bold text-gray-700 truncate">{lesson.title}</p>
         <p className="text-[10px] text-gray-400 uppercase tracking-tight">{getTypeName(lesson.type)}</p>
       </div>
       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -498,7 +894,8 @@ function SortableModule({
   allModules,
   onDelete,
   onEdit,
-  onAddLesson,
+  onAddLessonPress,
+  onEditLessonPress,
   onDeleteLesson,
   onReorderLessons,
 }: {
@@ -506,12 +903,12 @@ function SortableModule({
   allModules: Module[]
   onDelete: (id: string) => void
   onEdit: (module: Module) => void
-  onAddLesson: (moduleId: string, lesson: Lesson) => void
+  onAddLessonPress: (moduleId: string) => void
+  onEditLessonPress: (moduleId: string, lesson: Lesson) => void
   onDeleteLesson: (moduleId: string, lessonId: string) => void
   onReorderLessons: (moduleId: string, activeId: string, overId: string) => void
 }) {
   const [isExpanded, setIsExpanded] = useState(true)
-  const [showAddLesson, setShowAddLesson] = useState(false)
 
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: module.id })
 
@@ -543,96 +940,87 @@ function SortableModule({
   }
 
   return (
-    <>
-      {showAddLesson && (
-        <AddLessonModal
-          moduleId={module.id}
-          onClose={() => setShowAddLesson(false)}
-          onAdd={onAddLesson}
-        />
-      )}
-      <div
-        ref={setNodeRef}
-        style={style}
-        className={`bg-gray-50 border border-gray-200 rounded-xl mb-4 overflow-hidden ${isDragging ? 'shadow-lg ring-2 ring-[#103C11]/20' : ''}`}
-      >
-        <div className="flex items-center gap-3 p-4 bg-white border-b border-gray-200">
-          <button {...attributes} {...listeners} className="cursor-grab text-gray-400 hover:text-gray-600">
-            <GripVertical size={20} />
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`bg-gray-50 border border-gray-200 rounded-xl mb-4 overflow-hidden ${isDragging ? 'shadow-lg ring-2 ring-[#103C11]/20' : ''}`}
+    >
+      <div className="flex items-center gap-3 p-4 bg-white border-b border-gray-200">
+        <button {...attributes} {...listeners} className="cursor-grab text-gray-400 hover:text-gray-600">
+          <GripVertical size={20} />
+        </button>
+        <button
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-gray-500 hover:text-gray-700"
+        >
+          {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+        </button>
+        <div className="flex-1 min-w-0">
+          <h3 className="font-bold text-gray-800 flex items-center gap-2 flex-wrap">
+            {module.title}
+            <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-normal">
+              {module.lessons.length} bài học
+            </span>
+            {statusBadge()}
+            {module.duration_minutes && (
+              <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-normal flex items-center gap-1">
+                <Clock size={10} /> {module.duration_minutes} phút
+              </span>
+            )}
+          </h3>
+          {module.description && (
+            <p className="text-xs text-gray-400 mt-0.5 truncate">{module.description}</p>
+          )}
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            onClick={() => onAddLessonPress(module.id)}
+            className="flex items-center gap-1 text-xs font-bold text-[#103C11] bg-[#e6f0e7] px-3 py-1.5 rounded-lg hover:bg-[#d8e8da] transition-colors"
+          >
+            <Plus size={14} />
+            Thêm bài học
           </button>
           <button
-            onClick={() => setIsExpanded(!isExpanded)}
-            className="text-gray-500 hover:text-gray-700"
+            onClick={() => onEdit(module)}
+            className="p-2 text-gray-400 hover:text-[#103C11] transition-colors"
           >
-            {isExpanded ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+            <Edit2 size={16} />
           </button>
-          <div className="flex-1 min-w-0">
-            <h3 className="font-bold text-gray-800 flex items-center gap-2 flex-wrap">
-              {module.title}
-              <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-normal">
-                {module.lessons.length} bài học
-              </span>
-              {statusBadge()}
-              {module.duration_minutes && (
-                <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-normal flex items-center gap-1">
-                  <Clock size={10} /> {module.duration_minutes} phút
-                </span>
-              )}
-            </h3>
-            {module.description && (
-              <p className="text-xs text-gray-400 mt-0.5 truncate">{module.description}</p>
-            )}
-          </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <button
-              onClick={() => setShowAddLesson(true)}
-              className="flex items-center gap-1 text-xs font-bold text-[#103C11] bg-[#e6f0e7] px-3 py-1.5 rounded-lg hover:bg-[#d8e8da] transition-colors"
-            >
-              <Plus size={14} />
-              Thêm bài học
-            </button>
-            <button
-              onClick={() => onEdit(module)}
-              className="p-2 text-gray-400 hover:text-[#103C11] transition-colors"
-            >
-              <Edit2 size={16} />
-            </button>
-            <button
-              onClick={() => onDelete(module.id)}
-              className="p-2 text-gray-400 hover:text-red-500 transition-colors"
-            >
-              <Trash2 size={18} />
-            </button>
-          </div>
+          <button
+            onClick={() => onDelete(module.id)}
+            className="p-2 text-gray-400 hover:text-red-500 transition-colors"
+          >
+            <Trash2 size={18} />
+          </button>
         </div>
-
-        {isExpanded && (
-          <div className="p-4 bg-gray-50/50">
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-              <SortableContext
-                items={module.lessons.map(l => l.id)}
-                strategy={verticalListSortingStrategy}
-              >
-                {module.lessons.length > 0 ? (
-                  module.lessons.map(lesson => (
-                    <SortableLesson
-                      key={lesson.id}
-                      lesson={lesson}
-                      onDelete={(lessonId) => onDeleteLesson(module.id, lessonId)}
-                      onEdit={(lesson) => {/* Edit lesson inline future */ }}
-                    />
-                  ))
-                ) : (
-                  <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 text-sm">
-                    Chương này chưa có bài học nào. Nhấn <span className="font-bold text-[#103C11]">"Thêm bài học"</span> để bắt đầu.
-                  </div>
-                )}
-              </SortableContext>
-            </DndContext>
-          </div>
-        )}
       </div>
-    </>
+
+      {isExpanded && (
+        <div className="p-4 bg-gray-50/50">
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+            <SortableContext
+              items={module.lessons.map(l => l.id)}
+              strategy={verticalListSortingStrategy}
+            >
+              {module.lessons.length > 0 ? (
+                module.lessons.map(lesson => (
+                  <SortableLesson
+                    key={lesson.id}
+                    lesson={lesson}
+                    onDelete={(lessonId) => onDeleteLesson(module.id, lessonId)}
+                    onEdit={(les) => onEditLessonPress(module.id, les)}
+                  />
+                ))
+              ) : (
+                <div className="text-center py-6 border-2 border-dashed border-gray-200 rounded-lg text-gray-400 text-sm">
+                  Chương này chưa có bài học nào. Nhấn <span className="font-bold text-[#103C11]">"Thêm bài học"</span> để bắt đầu.
+                </div>
+              )}
+            </SortableContext>
+          </DndContext>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -645,8 +1033,14 @@ export default function CourseBuilder({
   onModulesChange?: (modules: Module[]) => void
 }) {
   const [modules, setModules] = useState<Module[]>(initialModules)
+  
+  // Modals status
   const [showChapterModal, setShowChapterModal] = useState(false)
   const [editingModule, setEditingModule] = useState<Module | undefined>(undefined)
+
+  const [showLessonModal, setShowLessonModal] = useState(false)
+  const [activeModuleId, setActiveModuleId] = useState<string | null>(null)
+  const [editingLesson, setEditingLesson] = useState<Lesson | undefined>(undefined)
 
   const updateModules = (updated: Module[]) => {
     setModules(updated)
@@ -719,18 +1113,54 @@ export default function CourseBuilder({
     updateModules(modules.filter(m => m.id !== id))
   }
 
-  const handleAddLesson = (moduleId: string, lesson: Lesson) => {
-    updateModules(
-      modules.map(m => {
-        if (m.id === moduleId) {
-          return { ...m, lessons: [...m.lessons, { ...lesson, order_index: m.lessons.length + 1 }] }
-        }
-        return m
-      })
-    )
+  // Open Lesson Modal Actions
+  const handleOpenAddLesson = (moduleId: string) => {
+    setActiveModuleId(moduleId)
+    setEditingLesson(undefined)
+    setShowLessonModal(true)
+  }
+
+  const handleOpenEditLesson = (moduleId: string, lesson: Lesson) => {
+    setActiveModuleId(moduleId)
+    setEditingLesson(lesson)
+    setShowLessonModal(true)
+  }
+
+  const handleSaveLesson = (moduleId: string, lessonData: Lesson) => {
+    if (editingLesson) {
+      // Edit mode
+      updateModules(
+        modules.map(m => {
+          if (m.id === moduleId) {
+            return {
+              ...m,
+              lessons: m.lessons.map(l => (l.id === editingLesson.id ? lessonData : l))
+            }
+          }
+          return m
+        })
+      )
+    } else {
+      // Add mode
+      updateModules(
+        modules.map(m => {
+          if (m.id === moduleId) {
+            return {
+              ...m,
+              lessons: [...m.lessons, { ...lessonData, order_index: m.lessons.length + 1 }]
+            }
+          }
+          return m
+        })
+      )
+    }
+    setShowLessonModal(false)
+    setEditingLesson(undefined)
+    setActiveModuleId(null)
   }
 
   const handleDeleteLesson = (moduleId: string, lessonId: string) => {
+    if (!confirm('Bạn có chắc chắn muốn xóa bài học này?')) return
     updateModules(
       modules.map(m => {
         if (m.id === moduleId) {
@@ -753,6 +1183,20 @@ export default function CourseBuilder({
             setEditingModule(undefined)
           }}
           onSave={editingModule ? handleSaveEditModule : handleAddModule}
+        />
+      )}
+
+      {/* Lesson Modal */}
+      {showLessonModal && activeModuleId && (
+        <LessonModal
+          moduleId={activeModuleId}
+          lesson={editingLesson}
+          onClose={() => {
+            setShowLessonModal(false)
+            setEditingLesson(undefined)
+            setActiveModuleId(null)
+          }}
+          onSave={handleSaveLesson}
         />
       )}
 
@@ -789,7 +1233,8 @@ export default function CourseBuilder({
                   allModules={modules}
                   onDelete={handleDeleteModule}
                   onEdit={handleEditModule}
-                  onAddLesson={handleAddLesson}
+                  onAddLessonPress={handleOpenAddLesson}
+                  onEditLessonPress={handleOpenEditLesson}
                   onDeleteLesson={handleDeleteLesson}
                   onReorderLessons={handleReorderLessons}
                 />
@@ -801,4 +1246,3 @@ export default function CourseBuilder({
     </>
   )
 }
-

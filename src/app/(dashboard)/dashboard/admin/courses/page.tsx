@@ -34,7 +34,6 @@ export default async function AdminCoursesPage() {
               <tr className="bg-gray-50 border-b border-gray-200">
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Khóa học</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Danh mục</th>
-                <th className="px-6 py-4 text-sm font-semibold text-gray-600">Giá</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600">Trạng thái</th>
                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 text-right">Thao tác</th>
               </tr>
@@ -42,7 +41,7 @@ export default async function AdminCoursesPage() {
             <tbody className="divide-y divide-gray-100">
               {(!courses || courses.length === 0) ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                  <td colSpan={4} className="px-6 py-12 text-center text-gray-500">
                     <div className="flex flex-col items-center gap-2">
                       <BookOpen size={40} className="text-gray-300" />
                       <p>Chưa có khóa học nào. Hãy bắt đầu bằng cách thêm khóa học mới!</p>
@@ -73,9 +72,6 @@ export default async function AdminCoursesPage() {
                       <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-md font-medium">
                         {course.categories?.name || 'Chung'}
                       </span>
-                    </td>
-                    <td className="px-6 py-4 font-semibold text-[#C7A959]">
-                      {course.price > 0 ? `${Number(course.price).toLocaleString('vi-VN')} đ` : 'Miễn phí'}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`px-3 py-1 rounded-full text-xs font-bold ${

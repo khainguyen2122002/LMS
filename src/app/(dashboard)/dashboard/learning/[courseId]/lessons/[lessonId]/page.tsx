@@ -75,8 +75,8 @@ export default async function LessonPage({
       progress = progressData
       isCompleted = !!progressData?.is_completed
 
-      // Lấy bài làm nếu đây là loại bài tập
-      if (lesson.type === 'assignment' && lesson.assignments?.length > 0) {
+      // Lấy bài làm nếu bài học này có bài tập tự luận đi kèm
+      if (lesson.assignments?.length > 0) {
         const { data: submissionData } = await supabase
           .from('submissions')
           .select('*')
