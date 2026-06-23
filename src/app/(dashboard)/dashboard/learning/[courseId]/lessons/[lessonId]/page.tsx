@@ -47,12 +47,12 @@ export default async function LessonPage({
   if (!isPreview) {
     const { data: enrollment } = await supabase
       .from('enrollments')
-      .select('id')
+      .select('id, status, blocked_lessons')
       .eq('user_id', user.id)
       .eq('course_id', courseId)
-      .single()
+      .maybeSingle()
 
-    if (!enrollment) {
+    if (!enrollment || enrollment.status !== 'active') {
       // Cho phép Admin/Lecturer xem mà không cần enroll
       const { data: profile } = await supabase
         .from('profiles')
@@ -64,13 +64,19 @@ export default async function LessonPage({
         redirect(`/dashboard/courses/${courseId}`)
       }
     } else {
+      // Kiểm tra xem bài học này có bị chặn không
+      const blockedLessons = (enrollment.blocked_lessons as string[]) || []
+      if (blockedLessons.includes(lessonId)) {
+        redirect('/dashboard/access-denied')
+      }
+
       // Lấy tiến độ hiện tại
       const { data: progressData } = await supabase
         .from('lesson_progress')
         .select('*')
         .eq('enrollment_id', enrollment.id)
         .eq('lesson_id', lessonId)
-        .single()
+        .maybeSingle()
       
       progress = progressData
       isCompleted = !!progressData?.is_completed
@@ -84,7 +90,7 @@ export default async function LessonPage({
           .eq('user_id', user.id)
           .order('submitted_at', { ascending: false })
           .limit(1)
-          .single()
+          .maybeSingle()
         
         submission = submissionData
       }

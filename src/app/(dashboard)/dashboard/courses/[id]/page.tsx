@@ -60,15 +60,17 @@ export default async function CourseDetailPage({ params }: PageProps) {
 
   // 2. Check if user is enrolled
   const { data: { user } } = await supabase.auth.getUser()
-  let isEnrolled = false
+  let enrollmentStatus: string | null = null
   if (user) {
     const { data: enrollment } = await supabase
       .from('enrollments')
-      .select('id')
+      .select('status')
       .eq('user_id', user.id)
       .eq('course_id', finalCourse.id)
-      .single()
-    isEnrolled = !!enrollment
+      .maybeSingle()
+    if (enrollment) {
+      enrollmentStatus = enrollment.status
+    }
   }
 
   // 3. Fetch modules and lessons
@@ -99,8 +101,8 @@ export default async function CourseDetailPage({ params }: PageProps) {
   const handleEnroll = async () => {
     'use server'
     const res = await enrollInCourse(finalCourse.id)
-    if (res.success && firstLessonId) {
-      redirect(`/dashboard/learning/${finalCourse.id}/lessons/${firstLessonId}`)
+    if (res.success) {
+      redirect(`/dashboard/courses/${finalCourse.id}`)
     }
   }
 
@@ -230,14 +232,14 @@ export default async function CourseDetailPage({ params }: PageProps) {
 
             {/* Form Hành động (Đăng ký học / Vào học) */}
             <div>
-              {isEnrolled ? (
+              {enrollmentStatus === 'active' || enrollmentStatus === 'completed' ? (
                 firstLessonId ? (
                   <Link 
                     href={`/dashboard/learning/${finalCourse.id}/lessons/${firstLessonId}`}
                     className="w-full py-4 px-6 bg-[#103C11] hover:bg-[#1e5c20] text-white rounded-2xl font-black text-center shadow-lg shadow-[#103C11]/20 transition-all flex items-center justify-center gap-2 active:scale-95 group"
                     id="btn-continue-learning"
                   >
-                    Tiếp tục học
+                    Vào học ngay
                     <ChevronRight size={18} className="group-hover:translate-x-1 transition-transform" />
                   </Link>
                 ) : (
@@ -249,6 +251,28 @@ export default async function CourseDetailPage({ params }: PageProps) {
                     Đã đăng ký (Chưa có bài học)
                   </button>
                 )
+              ) : enrollmentStatus === 'pending_approval' ? (
+                <button 
+                  disabled 
+                  className="w-full py-4 px-6 bg-yellow-100 text-yellow-600 border border-yellow-200 rounded-2xl font-black text-center cursor-not-allowed flex items-center justify-center gap-2"
+                  id="btn-pending-approval"
+                >
+                  <Clock size={18} className="animate-spin" />
+                  Đang chờ Admin phê duyệt...
+                </button>
+              ) : enrollmentStatus === 'rejected' ? (
+                <div className="space-y-2">
+                  <button 
+                    disabled 
+                    className="w-full py-4 px-6 bg-red-50 text-red-600 border border-red-200 rounded-2xl font-black text-center cursor-not-allowed"
+                    id="btn-rejected"
+                  >
+                    Yêu cầu bị từ chối
+                  </button>
+                  <p className="text-center text-[10px] font-bold text-red-500 uppercase tracking-wider">
+                    Vui lòng liên hệ ban quản trị để được hỗ trợ.
+                  </p>
+                </div>
               ) : (
                 <form action={handleEnroll}>
                   <button 

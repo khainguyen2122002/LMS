@@ -1,9 +1,11 @@
 'use client'
 
 import React, { useState, useRef } from 'react'
-import { Save, ArrowLeft, Image as ImageIcon, Settings, ListTree, Upload, X, Loader2, CheckCircle2 } from 'lucide-react'
+import { Save, ArrowLeft, Image as ImageIcon, Settings, ListTree, Upload, X, Loader2, CheckCircle2, Users } from 'lucide-react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import CourseBuilder from './CourseBuilder'
+import CourseStudentManager from './CourseStudentManager'
 import { saveCourse } from '@/app/actions/courses'
 
 interface CourseEditorProps {
@@ -12,7 +14,8 @@ interface CourseEditorProps {
 }
 
 export default function CourseEditor({ course, categories }: CourseEditorProps) {
-  const [activeTab, setActiveTab] = useState<'info' | 'curriculum'>('info')
+  const router = useRouter()
+  const [activeTab, setActiveTab] = useState<'info' | 'curriculum' | 'students'>('info')
   const [formData, setFormData] = useState({
     title: course?.title || '',
     slug: course?.slug || '',
@@ -83,7 +86,12 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
       setSaveError(result.error)
     } else {
       setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
+      if (!course?.id && result.courseId) {
+        router.push(`/dashboard/admin/courses/${result.courseId}`)
+      } else {
+        // Tải lại trang để đồng bộ ID mới từ database
+        window.location.reload()
+      }
     }
   }
 
@@ -148,6 +156,19 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
           <ListTree size={18} />
           Chương trình học
         </button>
+        {course?.id && (
+          <button
+            onClick={() => setActiveTab('students')}
+            className={`flex items-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all ${
+              activeTab === 'students'
+                ? 'bg-white text-[#103C11] shadow-sm'
+                : 'text-gray-500 hover:text-gray-700'
+            }`}
+          >
+            <Users size={18} />
+            Quản lý học viên
+          </button>
+        )}
       </div>
 
       {activeTab === 'info' ? (
@@ -293,16 +314,21 @@ export default function CourseEditor({ course, categories }: CourseEditorProps) 
                   </select>
                 </div>
               </div>
-
-
             </div>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'curriculum' ? (
         <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm min-h-[500px]">
           <CourseBuilder
             initialModules={course?.modules || []}
             onModulesChange={setModules}
+          />
+        </div>
+      ) : (
+        <div className="bg-white p-8 rounded-2xl border border-gray-200 shadow-sm min-h-[500px]">
+          <CourseStudentManager
+            courseId={course.id}
+            modules={modules}
           />
         </div>
       )}

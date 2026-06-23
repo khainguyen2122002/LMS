@@ -151,15 +151,60 @@ export async function enrollInCourse(courseId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return { error: 'Unauthorized' }
 
+  // Lấy tên của học viên để tạo thông báo cho Admin
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('full_name')
+    .eq('id', user.id)
+    .single()
+
+  const { data: course } = await supabase
+    .from('courses')
+    .select('title, lecturer_id')
+    .eq('id', courseId)
+    .single()
+
   const { error } = await supabase
     .from('enrollments')
     .insert({
       user_id: user.id,
       course_id: courseId,
-      status: 'active'
+      status: 'pending_approval'
     })
 
   if (error) return { error: error.message }
+
+  // Gửi thông báo cho giảng viên (lecturer_id) hoặc admin
+  if (course) {
+    const recipientIds: string[] = []
+    if (course.lecturer_id) {
+      recipientIds.push(course.lecturer_id)
+    }
+    
+    // Tìm các admin trong hệ thống để thông báo
+    const { data: admins } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('role', 'admin')
+    
+    if (admins) {
+      admins.forEach((adm: any) => {
+        if (!recipientIds.includes(adm.id)) {
+          recipientIds.push(adm.id)
+        }
+      })
+    }
+
+    for (const recipientId of recipientIds) {
+      await supabase.from('notifications').insert({
+        user_id: recipientId,
+        title: 'Yêu cầu đăng ký khóa học mới',
+        message: `Học viên "${profile?.full_name || 'Ẩn danh'}" vừa gửi yêu cầu đăng ký tham gia khóa học "${course.title}".`,
+        type: 'system',
+        link: `/dashboard/admin/courses/${courseId}`
+      })
+    }
+  }
 
   revalidatePath('/dashboard/courses')
   revalidatePath(`/dashboard/courses/${courseId}`)
